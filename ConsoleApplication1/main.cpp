@@ -33,7 +33,7 @@ int main()
 	namedWindow(g_szTitle);
 	createTrackbar("t", g_szTitle, &t, 256, 0);
 
-	VideoCapture cap(0);
+	VideoCapture cap("2.mp4");
 	cap.set(CV_CAP_PROP_FRAME_WIDTH, IMAGE_WIDTH);
 	cap.set(CV_CAP_PROP_FRAME_HEIGHT, IMAGE_HEIGHT);
 	if (!cap.isOpened())
@@ -66,12 +66,13 @@ int main()
 			//imgOriginal -= Scalar(B,G,R);
 
 #ifdef BLUE
-			GetDiffImage(imgOriginal, imgThresholded, t, blue, roiImg);//蓝色
+			Canny(imgOriginal, imgThresholded, t, 3 * t, 3);
+			//GetDiffImage(imgOriginal, imgThresholded, t, blue, roiImg);//蓝色
 #else
 			GetDiffImage(imgOriginal, imgThresholded, t, red, roiImg);//红色
 #endif
 			preProcess(imgThresholded);
-			findContours(imgThresholded, contours, RETR_CCOMP, CHAIN_APPROX_NONE);
+			findContours(imgThresholded, contours, RETR_EXTERNAL, CHAIN_APPROX_NONE);
 			drawContours(imgThresholded, contours, -1, Scalar(255, 255, 255));
 			for (auto itContours = contours.begin(); itContours != contours.end(); ++itContours)
 			{
@@ -80,13 +81,20 @@ int main()
 				{
 					RotatedRect s = fitEllipse(Mat(points));//拟合椭圆
 					//RotatedRect s = minAreaRect((points));//拟合椭圆
-					if ((s.size.height < s.size.width) || (s.size.height * s.size.width > 20000))//|| (s.size.height / s.size.width > 12))
+
+					if (s.size.height * s.size.width > 20000)//|| (s.size.height < s.size.width) ||(s.size.height / s.size.width > 12))
 					{
-						//cout<<s.size<<endl;
+						cout << s.size.height << "\t"<<s.size.width<<endl;
 						noTargetReason += "size don't cater to standard.\n";
 						continue;
 					}
+					Point2f vertex[4]; s.points(vertex);
+					//line(imgOriginal, (vertex[0] + vertex[3]) / 2, (vertex[1] + vertex[2]) / 2, Scalar(5, 255, 66), 2, CV_AA);
+					circle(imgOriginal, (vertex[0] + vertex[3]) / 2, 4, Scalar(22, 33, 244),2);
+					circle(imgOriginal, (vertex[1] + vertex[2]) / 2, 4, Scalar(0, 244, 233), 2);
+
 					vEllipse.push_back(s);
+					//rectangle(imgOriginal, s, Scalar(255, 255, 66), 2);
 					ellipse(imgOriginal, s, Scalar(255, 255, 66), 2);
 				}
 				else
@@ -104,27 +112,18 @@ int main()
 			{
 				roiImg = armors.getROIbox(imgOriginal);
 				armors.drawAllArmors(imgOriginal);
-				circle(imgOriginal, target*ZOOM_FACTOR, 5, Scalar(0, 255, 255), 1, 8, 3);
+				circle(imgOriginal, target * ZOOM_FACTOR, 5, Scalar(0, 255, 255), 1, 8, 3);
 				line(imgOriginal, target, target + armors.getVelocity(), Scalar(240, 33, 22), 2, CV_AA);
 
 				if (sendFilter >= 3)
 					sendBool = true;
 				else
 					sendFilter++;
-
-				if (sendBool)
-					cout << "发现目标~~~" << endl;
-				else
-					cout << "目标丢失~~~" << endl;
-
 			}
 			else//目标丢失
 			{
 				//noTargetReason = armors.error;
 				//cout << noTargetReason << endl;
-				putText(imgOriginal, "Looking for the enemy.......", Point(90 * ZOOM_FACTOR, 90 * ZOOM_FACTOR), FONT_HERSHEY_PLAIN, 2 * ZOOM_FACTOR, Scalar(0, 0, 255), 2, 8);
-				roiImg = Rect(0, 0, imgOriginal.cols * ZOOM_FACTOR, imgOriginal.rows * ZOOM_FACTOR);
-
 				sendFilter--;
 				if (sendFilter < 0)
 				{
@@ -133,8 +132,22 @@ int main()
 				}
 
 			}
+			if (sendBool)
+			{
+				armors.getRT();
+			}
+			else
+			{ 
+				cout << "目标丢失~~~" << endl;
+				putText(imgOriginal, "Looking for the enemy.......", Point(90 * ZOOM_FACTOR, 90 * ZOOM_FACTOR), FONT_HERSHEY_PLAIN, 2 * ZOOM_FACTOR, Scalar(0, 0, 255), 2, 8);
+				roiImg = Rect(0, 0, imgOriginal.cols * ZOOM_FACTOR, imgOriginal.rows * ZOOM_FACTOR);
+
+			}
+				
 			vEllipse.clear();
 			contours.swap(vector<vector<Point>>());
+			int64 t = getTickCount() - t0;
+			cout << "主线程：" << 1000 * t / getTickFrequency() << "ms" << "\n";
 		}
 
 		char key = (char)waitKey(1);
@@ -157,8 +170,6 @@ int main()
 		default:
 			;
 		}
-		int64 t = getTickCount() - t0;
-		cout << "主线程：" <<1000 * t/getTickFrequency() << "ms" << "\n";
 	}
 	config["t"] = to_string(t);
 	WriteConfig("video.cfg", config);
