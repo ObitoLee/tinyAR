@@ -84,6 +84,7 @@ bool ReadConfig(const string & filename, map<string, string> & m)
 {
 	m.clear();
 	ifstream infile(filename.c_str());
+
 	if (!infile) 
 	{
 		cout << "file open error" << endl;
