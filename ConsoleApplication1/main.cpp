@@ -34,8 +34,7 @@ int main()
 	createTrackbar("t", g_szTitle, &t, 256, 0);
 
 	VideoCapture cap("3.mp4");
-// 	cap.set(CV_CAP_PROP_FRAME_WIDTH, IMAGE_WIDTH);
-// 	cap.set(CV_CAP_PROP_FRAME_HEIGHT, IMAGE_HEIGHT);
+
 	if (!cap.isOpened())
 	{
 		cerr << "Can't open the source!Exit!\n";
@@ -47,9 +46,9 @@ int main()
 
 	Rect roiImg = Rect(0, 0, imgOriginal.cols * ZOOM_FACTOR, imgOriginal.rows * ZOOM_FACTOR);
 
+	vector<vector<Point> > contours;
 	vector<RotatedRect> vEllipse;//符合条件的椭圆
 	Armors armors(imgOriginal.cols*ZOOM_FACTOR, imgOriginal.rows*ZOOM_FACTOR);
-	vector<vector<Point> > contours;
 
 	int sendFilter = 0;
 	bool sendBool = false;
@@ -88,29 +87,25 @@ int main()
 // 					if (color != blue && color != blue - 1 && color != blue + 1)
 // 						continue;
 					
-					if (s.size.height * s.size.width > 18000*ZOOM_FACTOR*ZOOM_FACTOR || (s.size.height < 4 * s.size.width) || (s.size.height > s.size.width * 9))
+					if (s.size.height * s.size.width > 18000 * ZOOM_FACTOR*ZOOM_FACTOR 
+						|| (s.size.height < 4 * s.size.width) || (s.size.height > s.size.width * 9))
 					{
 						noTargetReason += "size don't cater to standard.\n";
 						continue;
 					}
-					cout << s.size.height << "\t" << s.size.width << endl;
+					//cout << s.size.height << "\t" << s.size.width << endl;
 					Point2f vertex[4]; s.points(vertex);
-					line(imgOriginal, (vertex[0] + vertex[3]) / 2, (vertex[1] + vertex[2]) / 2, Scalar(5, 255, 66), 2, CV_AA);
 					circle(imgOriginal, (vertex[0] + vertex[3]) / 2, 4, Scalar(22, 33, 244),2);
 					circle(imgOriginal, (vertex[1] + vertex[2]) / 2, 4, Scalar(0, 244, 233), 2);
 
 					vEllipse.push_back(s);
 					ellipse(imgOriginal, s, Scalar(255, 255, 66), 2);
 				}
-				else
-				{
-					//noTargetReason += "size of contours is too small or too big.\n";
-				}
 
 				points.swap(vector<Point>());
 			}
-			armors.inputEllipse(vEllipse,imgOriginal);//输入将测到的椭圆，寻找装甲
-			Point2f target = armors.getTarget();//求目标坐标
+			armors.inputEllipse(vEllipse);//输入将测到的椭圆，寻找装甲
+			vector<Point2f> target = armors.getTarget();//求目标坐标
 			//target = armors.track();//追踪
 
 			if (armors.number() > 0)//目标没有丢失
@@ -118,8 +113,9 @@ int main()
 				vaildFrames++;
 				//roiImg = armors.getROIbox(imgOriginal);
 				armors.drawAllArmors(imgOriginal);
-				circle(imgOriginal, target * ZOOM_FACTOR, 5, Scalar(0, 255, 255), 1, 8, 3);
-				line(imgOriginal, target, target + armors.getVelocity(), Scalar(240, 33, 22), 2, CV_AA);
+
+				circle(imgOriginal, target[i] * ZOOM_FACTOR, 5, Scalar(0, 255, 255), 1, 8, 3);
+
 
 				if (sendFilter >= 3)
 					sendBool = true;
