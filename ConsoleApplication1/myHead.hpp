@@ -30,10 +30,11 @@
 using namespace cv;
 using namespace std;
 
-Mat_<float> intrinsic_matrix = (Mat_<float>(3, 3) << 530.31526, 0, 368.02664,
-														0, 531.36963, 274.08000,
+Mat_<float> intrinsic_matrix = (Mat_<float>(3, 3) << 488.31706, 0, 334.75664,
+														0, 520.21521, 246.92317,
 														0, 0, 1);
-Mat_<float> distCoeffs = (Mat_<float>(5, 1) << -0.42437, 0.17281, -0.00660, 0.00088, 0.00000);
+Mat_<float> distCoeffs = (Mat_<float>(5, 1) << -0.04312539,-0.005736560, 0, 0, 0);
+
 Mat_<float> cameraPos = (Mat_<float>(3, 1) << 0, 0, 0);
 
 //@brief：图片预处理（膨胀，腐蚀，滤波）
@@ -111,17 +112,17 @@ void poseEstimation(vector<Point2f> _vertex, Mat_<double> A, Mat_<float> d, floa
 	world.push_back({ a, b, 0 });
 
 	Mat r, t, rM;
-// 	solvePnP(world, _vertex, A, d, r, t, false);
-// 	Rodrigues(r, rM);
-// 	cout << "迭代："<<r << endl << rM << endl << t << endl << endl;
+	 	solvePnP(world, _vertex, A, d, r, t, false);
+	 	Rodrigues(r, rM);
+	 	cout <<"旋转矩阵（迭代）：" << rM << "\n平移向量:" << t << endl << endl;
 
 	solvePnP(world, _vertex, A, d, r, t, false, CV_P3P);
 	//Rodrigues(r, rM);
 	//cout << "P3P："<<r << endl << rM << endl << t << endl << endl;
 
-// 	solvePnP(world, _vertex, A, d, r, t, false, CV_EPNP);
-// 	Rodrigues(r, rM);
-// 	cout <<  "EPNP："<<r << endl << rM << endl << t << endl << endl;
+	// 	solvePnP(world, _vertex, A, d, r, t, false, CV_EPNP);
+	// 	Rodrigues(r, rM);
+	// 	cout <<  "EPNP："<<r << endl << rM << endl << t << endl << endl;
 
 }
 
@@ -213,16 +214,17 @@ Armor::~Armor()
 class Armors
 {
 public:
-	Armors(int,int);
+	Armors(int, int);
 	~Armors();
-	int number();
+	int number(){ return vRlt.size(); }//@brief：返回检测到的装甲数量
 	void inputEllipse(vector<RotatedRect> _ellipses);
 	vector<Point2f> getTarget(size_t);
 	void drawAllArmors(Mat _img, Scalar _color = Scalar(100, 0, 211));
-	Mat getROI(Mat);
-	Rect getROIbox(Mat,int);
+	Mat getROI(Mat, int);
+	Rect getROIbox(Mat, int);
 	void getRT();
-	int getTargetNum(Mat img, Scalar color);
+	int getTargetNum(){ return targrtNum; }
+	float getScore(int i){ return vRlt[i].likelihood; }
 	String error;//没检测到装甲的原因
 private:
 	int imgWidth;
@@ -233,17 +235,13 @@ private:
 	vector<Point2f> target;
 };
 
-Armors::Armors(int _width,int _height)
+Armors::Armors(int _width, int _height)
 {
 	imgWidth = _width;
 	imgHeight = _height;
 }
 
-//@brief：返回检测到的装甲数量
-int Armors::number()
-{
-	return vRlt.size();
-}
+
 //@brief：输入检测到的椭圆，寻找装甲
 void Armors::inputEllipse(vector<RotatedRect> _ellipse)
 {
@@ -260,8 +258,6 @@ void Armors::inputEllipse(vector<RotatedRect> _ellipse)
 		for (unsigned int j = i + 1; j < _ellipse.size(); j++)
 		{
 			armor.initial();
-			if (_ellipse[i].center.x - _ellipse[j].center.x == 0)
-				continue;
 
 			double diffAngle = abs(_ellipse[i].angle - _ellipse[j].angle);
 			bool around180 = false;
@@ -271,11 +267,11 @@ void Armors::inputEllipse(vector<RotatedRect> _ellipse)
 				around180 = true;
 			}
 
-			if (diffAngle < T_ANGLE_THRE
-				&& abs(_ellipse[i].size.height - _ellipse[j].size.height) <
-				(_ellipse[i].size.height + _ellipse[j].size.height) / T_SIZE_THRE
-				&& abs(_ellipse[i].size.width - _ellipse[j].size.width) <
-				(_ellipse[i].size.width + _ellipse[j].size.width) / T_SIZE_THRE)
+			if (diffAngle < T_ANGLE_THRE)
+				// 				&& abs(_ellipse[i].size.height - _ellipse[j].size.height) <
+				// 				(_ellipse[i].size.height + _ellipse[j].size.height) / T_SIZE_THRE
+				// 				&& abs(_ellipse[i].size.width - _ellipse[j].size.width) <
+				// 				(_ellipse[i].size.width + _ellipse[j].size.width) / T_SIZE_THRE)
 			{
 				armor.center = (_ellipse[i].center + _ellipse[j].center) * 0.5;
 				if (around180)
@@ -298,17 +294,25 @@ void Armors::inputEllipse(vector<RotatedRect> _ellipse)
 
 				if (armor.size.width > 1.5 * armor.size.height)//装甲太细长，舍去 || 过于倾斜，舍去
 				{
-					cout << armor.size << endl;
+					//cout << armor.size << endl;
 					error += "Armor is too thin\n";
 					continue;
 				}
-				armor.calcLikelihood(min(_ellipse[i].size.height, _ellipse[j].size.height) 
+				armor.calcLikelihood(min(_ellipse[i].size.height, _ellipse[j].size.height)
 									/ max(_ellipse[i].size.height, _ellipse[j].size.height));
-				armor.calcLikelihood(1 - pow((diffAngle / T_ANGLE_THRE), 2));			
-				double angleOfEllipsesCenter = abs(atan((_ellipse[i].center.x - _ellipse[j].center.x)
-													/(_ellipse[i].center.y - _ellipse[j].center.y)) * 180 / CV_PI);
-				armor.calcLikelihood(sin(abs(angleOfEllipsesCenter - armor.angle)*CV_PI / 180));
+				cout << armor.likelihood << "\t";
+				armor.calcLikelihood(min(_ellipse[i].size.width, _ellipse[j].size.width)
+					/ max(_ellipse[i].size.width, _ellipse[j].size.width));
+				cout << min(_ellipse[i].size.width, _ellipse[j].size.width)	/ max(_ellipse[i].size.width, _ellipse[j].size.width) << "\t";
+				armor.calcLikelihood(1 - pow((diffAngle / T_ANGLE_THRE), 2));
+				cout << (1 - pow((diffAngle / T_ANGLE_THRE), 2)) << "\t";
 
+				double angleOfEllipsesCenter = 90;
+				if (_ellipse[i].center.y - _ellipse[j].center.y != 0)
+					angleOfEllipsesCenter = abs(atan((_ellipse[i].center.x - _ellipse[j].center.x) / (_ellipse[i].center.y - _ellipse[j].center.y)) * 180 / CV_PI);
+				armor.calcLikelihood(1 - pow(abs(90 - abs(angleOfEllipsesCenter - armor.angle)) / 30, 2));
+
+				cout << 1 - pow(abs(90 - abs(angleOfEllipsesCenter - armor.angle)) / 30, 2) << "\n";
 				if (armor.likelihood > 0.3)
 				{
 					Point2f vertexi[4], vertexj[4];
@@ -317,7 +321,7 @@ void Armors::inputEllipse(vector<RotatedRect> _ellipse)
 					if (_ellipse[i].center.x <= _ellipse[j].center.x)
 					{
 						armor.vertex[0] = ((vertexi[1] + vertexi[2]) / 2);
-						armor.vertex[1] = ((vertexi[0] + vertexi[3]) / 2);			
+						armor.vertex[1] = ((vertexi[0] + vertexi[3]) / 2);
 						armor.vertex[2] = ((vertexj[0] + vertexj[3]) / 2);
 						armor.vertex[3] = ((vertexj[1] + vertexj[2]) / 2);
 					}
@@ -335,40 +339,36 @@ void Armors::inputEllipse(vector<RotatedRect> _ellipse)
 
 					vRlt.push_back(armor);
 				}
-				else	
+				else
 					error += "unlike\n";
 
 				//cout<<armor.size<<endl;// cout<<armor.angle<<endl;
 			}
 			//else
-				//cout << "no angle:" << _ellipse[i].angle << "\t" << _ellipse[j].angle <<"\t"<< _ellipse[i].size << "\t" << _ellipse[j].size << endl;
+			//cout << "no angle:" << _ellipse[i].angle << "\t" << _ellipse[j].angle <<"\t"<< _ellipse[i].size << "\t" << _ellipse[j].size << endl;
 		}
 	}
-	cout << "======================\n";
+
 }
 
-bool sortByLikelihood(Armor &a,Armor &b)
+bool sortByLikelihood(Armor &a, Armor &b)
 {
-	return a.likelihood < b.likelihood;//降序排列
+	return a.likelihood > b.likelihood;//降序排列
 }
 
 //@brief：返回打击目标的像素坐标
 vector<Point2f> Armors::getTarget(size_t _num_Of_Target = 1)
 {
-	targrtNum = min(_num_Of_Target,vRlt.size());
+	target.clear();
+	targrtNum = min(_num_Of_Target, vRlt.size());
 	sort(vRlt.begin(), vRlt.end(), sortByLikelihood);
 	for (size_t i = 0; i < targrtNum; ++i)
 	{
+		cout << vRlt[i].likelihood << endl;
 		target.push_back(vRlt[i].center);
 		targetBox.push_back(vRlt[i].boundingRect());
 	}
 	return target;
-}
-
-//@brief：返回检测到目标数量
-int Armors::getTargetNum(Mat img, Scalar color)
-{
-	return targrtNum;
 }
 
 //@brief：在img上绘出颜色为color的所有装甲
@@ -392,12 +392,12 @@ void Armors::drawAllArmors(Mat img, Scalar color)
 void Armors::getRT()
 {
 	for (size_t i = 0; i < targrtNum; i++)
-		poseEstimation(vRlt[i].vertex, intrinsic_matrix, distCoeffs, 50, 50);
+		poseEstimation(vRlt[i].vertex, intrinsic_matrix, distCoeffs, 30, 30);
 }
 //@brief：返回感兴趣区域Mat
-Mat Armors::getROI(Mat _img)
+Mat Armors::getROI(Mat _img, int i = 0)
 {
-	return _img(getROIbox(_img));
+	return _img(getROIbox(_img, i));
 }
 //@brief：返回感兴趣区域Rect
 Rect Armors::getROIbox(Mat _img, int i = 0)

@@ -13,7 +13,7 @@ using namespace std;
 #define DEBUG            //图像显示
 #define BLUE
 #define CAM
-
+#define TARGETNUM 4
 #define minContour 40
 #define maxContour 6000
 
@@ -52,20 +52,22 @@ int main()
 
 	int sendFilter = 0;
 	bool sendBool = false;
-	int frames = 0, vaildFrames = 0;
+	int frames = 0;
+	int	vaildFrames[TARGETNUM] = { 0 };
+
 	while (true)
 	{
 		String noTargetReason;
 		int64 t0 = getTickCount();
-		frames++;
 		if (!paused)
 		{
+			frames++;
 			if (!cap.read(imgOriginal))
 				break;
 
 			resize(imgOriginal, imgOriginal, Size(imgOriginal.cols * ZOOM_FACTOR, imgOriginal.rows * ZOOM_FACTOR));//等比例缩小
 			//imgOriginal -= Scalar(B,G,R);
-
+			
 #ifdef BLUE
 			//Canny(imgOriginal, imgThresholded, t, 3 * t, 3);
 			GetDiffImage(imgOriginal, imgThresholded, t, blue, roiImg);//蓝色
@@ -82,20 +84,20 @@ int main()
 				{
 					RotatedRect s = fitEllipse(points);//拟合椭圆
 					//RotatedRect s = minAreaRect((points));//拟合椭圆
-// 					Rect colorRect = (s.boundingRect() - Point(7, 7) + Size(14, 14)) & roiImg;
-// 					int color = colorJudge(imgOriginal(colorRect));
-// 					if (color != blue && color != blue - 1 && color != blue + 1)
-// 						continue;
-					
-					if (s.size.height * s.size.width > 18000 * ZOOM_FACTOR*ZOOM_FACTOR 
-						|| (s.size.height < 4 * s.size.width) || (s.size.height > s.size.width * 9))
+					// 					Rect colorRect = (s.boundingRect() - Point(7, 7) + Size(14, 14)) & roiImg;
+					// 					int color = colorJudge(imgOriginal(colorRect));
+					// 					if (color != blue && color != blue - 1 && color != blue + 1)
+					// 						continue;
+
+					if (s.size.height * s.size.width > 18000 * ZOOM_FACTOR*ZOOM_FACTOR
+						|| (s.size.height < 4 * s.size.width) || (s.size.height > s.size.width * 11))
 					{
 						noTargetReason += "size don't cater to standard.\n";
 						continue;
 					}
 					//cout << s.size.height << "\t" << s.size.width << endl;
 					Point2f vertex[4]; s.points(vertex);
-					circle(imgOriginal, (vertex[0] + vertex[3]) / 2, 4, Scalar(22, 33, 244),2);
+					circle(imgOriginal, (vertex[0] + vertex[3]) / 2, 4, Scalar(22, 33, 244), 2);
 					circle(imgOriginal, (vertex[1] + vertex[2]) / 2, 4, Scalar(0, 244, 233), 2);
 
 					vEllipse.push_back(s);
@@ -105,24 +107,24 @@ int main()
 				points.swap(vector<Point>());
 			}
 			armors.inputEllipse(vEllipse);//输入将测到的椭圆，寻找装甲
-			vector<Point2f> target = armors.getTarget();//求目标坐标
+			vector<Point2f> target = armors.getTarget(TARGETNUM);//求目标坐标
 			//target = armors.track();//追踪
-
-			if (armors.number() > 0)//目标没有丢失
+			//cout << "target detected:" << armors.getTargetNum() << endl;
+			for (int i = 0; i < armors.getTargetNum(); ++i)//检测到目标
 			{
-				vaildFrames++;
+				vaildFrames[i]++;
 				//roiImg = armors.getROIbox(imgOriginal);
 				armors.drawAllArmors(imgOriginal);
 
 				circle(imgOriginal, target[i] * ZOOM_FACTOR, 5, Scalar(0, 255, 255), 1, 8, 3);
-
+				putText(imgOriginal, to_string(armors.getScore(i)), target[i] * ZOOM_FACTOR, FONT_HERSHEY_PLAIN, 2 * ZOOM_FACTOR, Scalar(0, 0, 255), 2, 8);
 
 				if (sendFilter >= 3)
 					sendBool = true;
 				else
 					sendFilter++;
 			}
-			else//目标丢失
+			if (armors.getTargetNum() == 0)
 			{
 				noTargetReason += armors.error;
 				cout << noTargetReason << endl;
@@ -132,25 +134,21 @@ int main()
 					sendFilter = 0;
 					sendBool = false;
 				}
-
 			}
 			if (sendBool)
 			{
-				//cout << "find" << endl;
 				armors.getRT();
 			}
 			else
-			{ 
+			{
 				//cout << "目标丢失~~~" << endl;
 				putText(imgOriginal, "Looking for the enemy.......", Point(90 * ZOOM_FACTOR, 90 * ZOOM_FACTOR), FONT_HERSHEY_PLAIN, 2 * ZOOM_FACTOR, Scalar(0, 0, 255), 2, 8);
 				//roiImg = Rect(0, 0, imgOriginal.cols, imgOriginal.rows);
 
 			}
-				
 			vEllipse.clear();
 			contours.swap(vector<vector<Point>>());
-			
-			
+			cout << "\n======================\n";
 		}
 
 		char key = (char)waitKey(1);
@@ -177,7 +175,13 @@ int main()
 		//cout << "主线程：" << 1000 * t / getTickFrequency() << "ms" << "\n";
 		
 	}
-	cout << vaildFrames << "/" << frames << endl;
+
+	cout << "total：\t" << frames << endl;
+	for (int i = 0; i < TARGETNUM;++i)
+	{
+		cout << i+1 << ":\t" << vaildFrames[i]<<endl;
+	}
+ 
 	config["t"] = to_string(t);
 	WriteConfig("video.cfg", config);
 	return 0;
