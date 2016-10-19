@@ -112,9 +112,9 @@ void poseEstimation(vector<Point2f> _vertex, Mat_<double> A, Mat_<float> d, floa
 	world.push_back({ a, b, 0 });
 
 	Mat r, t, rM;
-	 	solvePnP(world, _vertex, A, d, r, t, false);
-	 	Rodrigues(r, rM);
-	 	cout <<"旋转矩阵（迭代）：" << rM << "\n平移向量:" << t << endl << endl;
+	solvePnP(world, _vertex, A, d, r, t, false);
+	Rodrigues(r, rM);
+	//cout << "旋转矩阵（迭代）：" << rM << "\n平移向量:" << t << endl << endl;
 
 	solvePnP(world, _vertex, A, d, r, t, false, CV_P3P);
 	//Rodrigues(r, rM);
@@ -123,7 +123,6 @@ void poseEstimation(vector<Point2f> _vertex, Mat_<double> A, Mat_<float> d, floa
 	// 	solvePnP(world, _vertex, A, d, r, t, false, CV_EPNP);
 	// 	Rodrigues(r, rM);
 	// 	cout <<  "EPNP："<<r << endl << rM << endl << t << endl << endl;
-
 }
 
 /*@brief：在img的roi区域内寻找亮度大于threshold的区域，返回二值图
@@ -307,12 +306,18 @@ void Armors::inputEllipse(vector<RotatedRect> _ellipse)
 				armor.calcLikelihood(1 - pow((diffAngle / T_ANGLE_THRE), 2));
 				cout << (1 - pow((diffAngle / T_ANGLE_THRE), 2)) << "\t";
 
-				double angleOfEllipsesCenter = 90;
-				if (_ellipse[i].center.y - _ellipse[j].center.y != 0)
-					angleOfEllipsesCenter = abs(atan((_ellipse[i].center.x - _ellipse[j].center.x) / (_ellipse[i].center.y - _ellipse[j].center.y)) * 180 / CV_PI);
+// 				double angleOfEllipsesCenter = 90;
+// 				if (_ellipse[i].center.y - _ellipse[j].center.y != 0)
+// 					angleOfEllipsesCenter = abs(atan((_ellipse[i].center.x - _ellipse[j].center.x) / (_ellipse[i].center.y - _ellipse[j].center.y)) * 180 / CV_PI);
+// 				
+				Point2f centerSub = (_ellipse[i].center.x > _ellipse[j].center.x) ? (_ellipse[i].center - _ellipse[j].center) : (_ellipse[j].center - _ellipse[i].center);
+				double angleOfEllipsesCenter = acos(-centerSub.y / lineLength(_ellipse[i].center, _ellipse[j].center)) * 180 / CV_PI;
 				armor.calcLikelihood(1 - pow(abs(90 - abs(angleOfEllipsesCenter - armor.angle)) / 30, 2));
 
-				cout << 1 - pow(abs(90 - abs(angleOfEllipsesCenter - armor.angle)) / 30, 2) << "\n";
+				cout << 1 - pow(abs(90 - abs(angleOfEllipsesCenter - armor.angle)) / 30, 2) << " = ";
+
+				cout << angleOfEllipsesCenter << "   " << armor.angle << endl;
+				//cout << armor.likelihood << "\n";
 				if (armor.likelihood > 0.3)
 				{
 					Point2f vertexi[4], vertexj[4];
@@ -364,7 +369,7 @@ vector<Point2f> Armors::getTarget(size_t _num_Of_Target = 1)
 	sort(vRlt.begin(), vRlt.end(), sortByLikelihood);
 	for (size_t i = 0; i < targrtNum; ++i)
 	{
-		cout << vRlt[i].likelihood << endl;
+		//cout << vRlt[i].likelihood << endl;
 		target.push_back(vRlt[i].center);
 		targetBox.push_back(vRlt[i].boundingRect());
 	}
@@ -378,10 +383,10 @@ void Armors::drawAllArmors(Mat img, Scalar color)
 	{
 		vector<Point2f> points = vRlt[i].vertex;
 
-		putText(img, "A", points[0], FONT_HERSHEY_PLAIN, 2, Scalar(0, 0, 255));
-		putText(img, "B", points[1], FONT_HERSHEY_PLAIN, 2, Scalar(0, 0, 255));
-		putText(img, "C", points[2], FONT_HERSHEY_PLAIN, 2, Scalar(0, 0, 255));
-		putText(img, "D", points[3], FONT_HERSHEY_PLAIN, 2, Scalar(0, 0, 255));
+		putText(img, "A", points[0], FONT_HERSHEY_PLAIN, 1, Scalar(0, 0, 255));
+		putText(img, "B", points[1], FONT_HERSHEY_PLAIN, 1, Scalar(0, 0, 255));
+		putText(img, "C", points[2], FONT_HERSHEY_PLAIN, 1, Scalar(0, 0, 255));
+		putText(img, "D", points[3], FONT_HERSHEY_PLAIN, 1, Scalar(0, 0, 255));
 
 		for (int ni = 0; ni < 4; ni++)
 			line(img, points[ni], points[(ni + 1) % 4], Scalar::all(0), 2, LINE_AA);

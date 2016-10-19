@@ -33,7 +33,7 @@ int main()
 	namedWindow(g_szTitle);
 	createTrackbar("t", g_szTitle, &t, 256, 0);
 
-	VideoCapture cap("3.mp4");
+	VideoCapture cap("4.mp4");
 
 	if (!cap.isOpened())
 	{
@@ -116,8 +116,8 @@ int main()
 				//roiImg = armors.getROIbox(imgOriginal);
 				armors.drawAllArmors(imgOriginal);
 
-				circle(imgOriginal, target[i] * ZOOM_FACTOR, 5, Scalar(0, 255, 255), 1, 8, 3);
-				putText(imgOriginal, to_string(armors.getScore(i)), target[i] * ZOOM_FACTOR, FONT_HERSHEY_PLAIN, 2 * ZOOM_FACTOR, Scalar(0, 0, 255), 2, 8);
+				circle(imgOriginal, target[i], 5, Scalar(0, 255, 255), 1, 8, 3);
+				putText(imgOriginal, to_string(armors.getScore(i)), target[i], FONT_HERSHEY_PLAIN, 1, Scalar(0, 0, 255));
 
 				if (sendFilter >= 3)
 					sendBool = true;
