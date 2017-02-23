@@ -58,10 +58,9 @@ bool AnalyseLine(const string & line, string & key, string & value)
 	int start_pos = 0, end_pos = line.size() - 1, pos;
 	if ((pos = line.find(COMMENT_CHAR)) != -1) 
 	{
-		if (0 == pos) 
-		{  // 行的第一个字符就是注释字符
+		if (0 == pos)   // 行的第一个字符就是注释字符
 			return false;
-		}
+
 		end_pos = pos - 1;
 	}
 	string new_line = line.substr(start_pos, start_pos + 1 - end_pos);  // 预处理，删除注释部分
@@ -111,10 +110,7 @@ bool WriteConfig(const string & filename, map<string, string> & m)
 	}
 
 	for (auto mite = m.begin(); mite != m.end(); ++mite)
-	{
 		outfile << mite->first << "=" << mite->second << endl;
-
-	}
 
 	outfile.close();
 	return true;
@@ -125,7 +121,5 @@ void PrintConfig(const map<string, string> & m)
 {
 	map<string, string>::const_iterator mite = m.begin();
 	for (; mite != m.end(); ++mite) 
-	{
 		cout << mite->first << "=" << mite->second << endl;
-	}
 }
